@@ -1,0 +1,21 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+# Secrets / keys
+*.pem
+*.key
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# JSON generated files
+metrics.json
+timeseries.json
+
+# Docs
+docs/

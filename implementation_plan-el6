@@ -1,0 +1,74 @@
+# Predictive Cloud Failover System (Proof of Concept)
+
+Design a predictive failover system for multi-service cloud infrastructures. It anticipates downtime using an ML model, seamlessly routes traffic to a local backup infrastructure provisioned dynamically via Terraform, and synchronizes state (databases and files) back to the primary cloud once it recovers, functioning akin to a "git push" for infrastructure state.
+
+## Proof of Concept Design
+
+To demonstrate the capability across a group of interacting cloud services, we will use a classic 3-tier architecture for the PoC:
+1.  **Compute/API:** A Node.js REST API.
+2.  **Database:** A PostgreSQL relational database.
+3.  **Object Storage:** File storage for uploads.
+
+This ensures we handle different types of state (relational data and unstructured files).
+
+## Proposed Architecture
+
+### 1. Primary Cloud Infrastructure (AWS Group)
+-   **Compute (AWS EC2 / Auto Scaling Group):** Hosts the Node.js API.
+-   **Database (AWS RDS for PostgreSQL):** Managed relational database.
+-   **Storage (AWS S3):** Object storage for application files.
+-   **Telemetry Agent:** A local daemon on EC2/RDS monitoring CPU, memory, database connections, and HTTP response latency, streaming this to the predictor.
+-   **Stress Simulation:** We will inject faults (e.g., using `stress-ng` on EC2, or simulating high connection counts on RDS) to train the ML model and test the failover.
+
+### 2. Local Controller & Traffic Router
+*This runs locally on your network and acts as the brain and gateway.*
+-   **Local Gateway (HAProxy/NGINX):** The main entry point for users. It normally proxies all traffic directly to the AWS infrastructure.
+-   **Prediction Service (ML):** A Python service running a Random Forest or XGBoost model. It continuously evaluates the telemetry from AWS. If the "Probability of Failure" crosses a threshold, it triggers the failover workflow.
+
+### 3. Local Backup Infrastructure (Terraform)
+*Provisioned on-demand when downtime is predicted.*
+-   **Terraform Automation:** Scripts triggered by the Prediction Service.
+-   **Compute (Docker):** Spins up Node.js API containers.
+-   **Database (Dockerized Postgres):** Spins up a local PostgreSQL container.
+-   **Storage (MinIO):** Spins up a MinIO container, which is an S3-compatible local object storage system.
+
+### 4. State Synchronization (The "Git-Push" Mechanism)
+When AWS goes down, users interact with the local infrastructure. State changes (new DB rows, uploaded files) happen locally.
+-   **Database Sync:** We will implement a Sync Engine script. During failover, the local Postgres records timestamps. Upon recovery, the script extracts delta records (new/modified rows) and performs an `UPSERT` (Update/Insert) into the AWS RDS database.
+-   **Object Storage Sync:** We will utilize the MinIO Client (`mc mirror`) or `aws s3 sync` to automatically push any new files uploaded to the local MinIO bucket back to the AWS S3 bucket.
+
+## Implementation Phases
+
+### Phase 1: AWS Multi-Service Setup & Telemetry
+-   Provision the AWS environment (EC2, RDS, S3) using Terraform.
+-   Deploy a simple Node.js API (e.g., a "Notes" app with text and image attachments).
+-   Set up the telemetry pipeline to monitor the health of all three AWS services.
+
+### Phase 2: Local Gateway & ML Predictor
+-   Set up the Local HAProxy/NGINX gateway to route to AWS.
+-   Develop the Python ML service. We will generate synthetic stress data to train a Random Forest model to recognize the patterns preceding a crash.
+-   Connect the Gateway and Predictor so the Predictor can dynamically rewrite gateway routing rules.
+
+### Phase 3: Dynamic Local Infrastructure (Terraform)
+-   Write the Terraform configuration to deploy the local Docker-based equivalent (Node API, Postgres, MinIO).
+-   Configure the Prediction Service to execute `terraform apply` when a crash is imminent.
+
+### Phase 4: State Synchronization Engine
+-   Develop the bidirectional data sync logic.
+-   **The "Commit":** Local infrastructure handles the load.
+-   **The "Push":** When the Predictor detects AWS is healthy again, it locks local writes briefly, executes the Postgres diff sync, runs the S3 bucket sync, and then updates the Local Gateway to route traffic back to AWS.
+
+## Verification Plan
+
+### Automated Tests
+-   **Infrastructure Mirroring Test:** Verify Terraform successfully spins up Postgres, MinIO, and the API locally.
+-   **Sync Engine Test:** Write records locally, run the sync script, and query AWS RDS/S3 to ensure 100% data fidelity.
+
+### Manual PoC Demonstration
+1.  **Normal State:** User connects to the Local Gateway, interacting with the AWS Node.js app, RDS, and S3.
+2.  **Stress Injection:** Run a script to exhaust AWS RDS connections and EC2 CPU.
+3.  **Predictive Failover:** The Local Predictor notices the anomaly, runs Terraform, spins up the local stack, and swaps the Gateway routing.
+4.  **Local Operation (Downtime):** The user continues adding notes/images, completely unaware AWS is down. Data is stored in local Postgres and MinIO.
+5.  **Recovery & Sync:** We stop the AWS stress. The Predictor sees AWS is healthy, initiates the "git-push" sync script to push local DB and MinIO changes to AWS, and routes the Gateway back.
+
+

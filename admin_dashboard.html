@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agentic Cloud Failover Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --panel: #1e293b;
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --accent: #3b82f6;
+            --success: #10b981;
+            --danger: #ef4444;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 40px;
+        }
+        header { margin-bottom: 40px; text-align: center; }
+        h1 { margin: 0; font-size: 38px; font-weight: 800; background: -webkit-linear-gradient(#3b82f6, #10b981); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        p.subtitle { color: var(--muted); margin-top: 10px; font-size: 18px; }
+        
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .card {
+            background: var(--panel);
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.4);
+        }
+        
+        .card h2 { margin-top: 0; font-size: 20px; color: var(--muted); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 15px; }
+        
+        .status-panel {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+        }
+        
+        .stat-value { font-size: 56px; font-weight: 900; margin: 15px 0; font-variant-numeric: tabular-nums; }
+        .stat-label { font-size: 16px; color: var(--muted); text-transform: uppercase; letter-spacing: 2px; font-weight: bold; }
+        
+        .indicator {
+            display: inline-block;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-weight: 800;
+            font-size: 16px;
+            margin-top: 25px;
+            letter-spacing: 1px;
+            transition: all 0.3s ease;
+        }
+        
+        .badge-aws { background: rgba(59, 130, 246, 0.15); color: var(--accent); border: 2px solid var(--accent); }
+        .badge-local { background: rgba(16, 185, 129, 0.15); color: var(--success); border: 2px solid var(--success); }
+        .badge-critical { background: rgba(239, 68, 68, 0.15); color: var(--danger); border: 2px solid var(--danger); animation: pulse-danger 1s infinite; }
+        
+        @keyframes pulse-danger { 
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); } 
+            70% { box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); } 
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } 
+        }
+        
+        .chart-container { position: relative; height: 350px; width: 100%; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Agentic ML Predictor & Router</h1>
+        <p class="subtitle">Real-Time Telemetry & Predictive Failover Visualization</p>
+    </header>
+    
+    <div class="container">
+        <!-- Status Panel -->
+        <div class="card status-panel">
+            <div>
+                <div class="stat-label">Current Cloud CPU Load</div>
+                <div class="stat-value" id="cpu-val" style="color: var(--accent);">0.0%</div>
+            </div>
+            <div>
+                <div class="stat-label">ML Predicted Failure Probability</div>
+                <div class="stat-value" id="prob-val" style="color: var(--success);">0.0%</div>
+            </div>
+            <div>
+                <div class="stat-label">Active Traffic Routing Layer</div>
+                <div class="stat-value">
+                    <span id="route-badge" class="indicator badge-aws">AWS CLOUD (PRIMARY)</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- CPU Chart -->
+        <div class="card">
+            <h2>Cloud CPU Usage History</h2>
+            <div class="chart-container">
+                <canvas id="cpuChart"></canvas>
+            </div>
+        </div>
+        
+        <!-- Probability Chart -->
+        <div class="card">
+            <h2>ML Downtime Prediction Probability</h2>
+            <div class="chart-container">
+                <canvas id="probChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Setup Charts
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.font.family = "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif";
+        
+        const commonOptions = {
+            responsive: true, maintainAspectRatio: false,
+            animation: { duration: 400, easing: 'linear' },
+            scales: {
+                x: { display: false },
+                y: { min: 0, max: 100, grid: { color: 'rgba(255,255,255,0.05)' }, border: { dash: [4, 4] } }
+            },
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+            elements: { point: { radius: 0 } } // hide points for smooth line
+        };
+
+        const ctxCpu = document.getElementById('cpuChart').getContext('2d');
+        const cpuChart = new Chart(ctxCpu, {
+            type: 'line',
+            data: { labels: Array(60).fill(''), datasets: [{ data: Array(60).fill(0), borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] },
+            options: commonOptions
+        });
+
+        const ctxProb = document.getElementById('probChart').getContext('2d');
+        const probChart = new Chart(ctxProb, {
+            type: 'line',
+            data: { labels: Array(60).fill(''), datasets: [{ data: Array(60).fill(0), borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] },
+            options: commonOptions
+        });
+
+        // Fetch Data Loop
+        async function fetchMetrics() {
+            try {
+                const res = await fetch('/admin/metrics');
+                const data = await res.json();
+                
+                // Update UI Texts
+                document.getElementById('cpu-val').innerText = data.cpu.toFixed(1) + '%';
+                const probVal = document.getElementById('prob-val');
+                probVal.innerText = data.probability.toFixed(1) + '%';
+                
+                if (data.probability < 50) probVal.style.color = 'var(--success)';
+                else if (data.probability < 85) probVal.style.color = 'orange';
+                else probVal.style.color = 'var(--danger)';
+
+                const badge = document.getElementById('route-badge');
+                if (data.failover_active) {
+                    badge.className = 'indicator badge-local badge-critical';
+                    badge.innerText = 'FAILOVER ACTIVE: LOCAL SIMULATION';
+                } else {
+                    badge.className = 'indicator badge-aws';
+                    badge.innerText = 'AWS CLOUD (PRIMARY)';
+                }
+
+                // Update Charts
+                cpuChart.data.datasets[0].data.shift();
+                cpuChart.data.datasets[0].data.push(data.cpu);
+                cpuChart.update();
+
+                probChart.data.datasets[0].data.shift();
+                probChart.data.datasets[0].data.push(data.probability);
+                probChart.update();
+
+            } catch (err) {
+                console.error("Error fetching admin metrics", err);
+            }
+            setTimeout(fetchMetrics, 1000); // refresh every 1 second
+        }
+        
+        fetchMetrics();
+    </script>
+</body>
+</html>
