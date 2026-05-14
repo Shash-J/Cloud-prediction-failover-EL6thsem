@@ -284,6 +284,10 @@
                 const response = await fetch(window.location.href + '?ping=' + Date.now(), { signal: controller.signal });
                 clearTimeout(timeoutId);
                 
+                if (!response.ok) {
+                    throw new Error("Server returned " + response.status);
+                }
+                
                 const end = performance.now();
                 let latency = Math.round(end - start);
                 
