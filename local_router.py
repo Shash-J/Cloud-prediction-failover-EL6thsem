@@ -120,6 +120,7 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_response(response.getcode())
                 self.send_header('Content-type', response.info().get_content_type())
                 self.send_header('X-Actual-Backend-Server', State.routing_to)
+                self.send_header('Access-Control-Expose-Headers', 'X-Actual-Backend-Server')
                 self.end_headers()
                 self.wfile.write(response.read())
         except Exception as e:

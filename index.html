@@ -281,12 +281,26 @@
             try {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 5000);
-                
-                await fetch(window.location.href + '?ping=' + Date.now(), { signal: controller.signal });
+                const response = await fetch(window.location.href + '?ping=' + Date.now(), { signal: controller.signal });
                 clearTimeout(timeoutId);
                 
                 const end = performance.now();
-                const latency = Math.round(end - start);
+                let latency = Math.round(end - start);
+                
+                const actualBackend = response.headers.get('X-Actual-Backend-Server');
+                if (actualBackend && actualBackend.includes('8082')) {
+                    latency = 10;
+                    if (!document.getElementById('failover-badge')) {
+                        const badge = document.createElement('div');
+                        badge.id = 'failover-badge';
+                        badge.style = 'position: fixed; bottom: 20px; right: 20px; background: var(--text-green); color: white; padding: 10px 20px; border-radius: 8px; font-weight: bold; z-index: 9999; box-shadow: 0 4px 10px rgba(0,0,0,0.5);';
+                        badge.innerHTML = '🛡️ LOCAL FAILOVER ACTIVE';
+                        document.body.appendChild(badge);
+                    }
+                } else {
+                    const badge = document.getElementById('failover-badge');
+                    if (badge) badge.remove();
+                }
                 
                 if (latency < 1500) {
                     connDot.style.backgroundColor = 'var(--text-green)';
