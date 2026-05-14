@@ -20,6 +20,10 @@ class State:
     prob_failure = 0.0
     all_metrics = []
     timeout_count = 0
+    memory_percent = 0.0
+    upload_speed = 0.0
+    download_speed = 0.0
+    process_count = 0
     
 def predictor_loop():
     print("[Predictor] Starting ML monitoring loop...")
@@ -31,6 +35,10 @@ def predictor_loop():
                 data = json.loads(response.read().decode())
                 cpu = data.get("cpu_percent", 0)
                 State.latest_cpu = cpu
+                State.memory_percent = data.get("memory_percent", 0)
+                State.upload_speed = data.get("upload_speed_kbps", 0)
+                State.download_speed = data.get("download_speed_kbps", 0)
+                State.process_count = data.get("process_count", 0)
                 
                 State.cpu_history.append(cpu)
                 if len(State.cpu_history) > 5:
@@ -64,7 +72,11 @@ def predictor_loop():
                     "cpu_percent": cpu,
                     "probability": prob_failure,
                     "failover_active": State.failover_active,
-                    "routing_to": State.routing_to
+                    "routing_to": State.routing_to,
+                    "memory_percent": State.memory_percent,
+                    "upload_speed_kbps": State.upload_speed,
+                    "download_speed_kbps": State.download_speed,
+                    "process_count": State.process_count
                 }
                 State.all_metrics.append(log_entry)
                 try:
@@ -96,7 +108,11 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                 "cpu": State.latest_cpu,
                 "probability": State.prob_failure,
                 "failover_active": State.failover_active,
-                "routing_to": State.routing_to
+                "routing_to": State.routing_to,
+                "memory": State.memory_percent,
+                "upload": State.upload_speed,
+                "download": State.download_speed,
+                "processes": State.process_count
             }
             self.wfile.write(json.dumps(data).encode())
             return

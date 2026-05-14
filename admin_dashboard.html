@@ -20,28 +20,28 @@
             background-color: var(--bg);
             color: var(--text);
             margin: 0;
-            padding: 40px;
+            padding: 20px;
         }
-        header { margin-bottom: 40px; text-align: center; }
-        h1 { margin: 0; font-size: 38px; font-weight: 800; background: -webkit-linear-gradient(#3b82f6, #10b981); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        p.subtitle { color: var(--muted); margin-top: 10px; font-size: 18px; }
+        header { margin-bottom: 20px; text-align: center; }
+        h1 { margin: 0; font-size: 32px; font-weight: 800; background: -webkit-linear-gradient(#3b82f6, #10b981); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        p.subtitle { color: var(--muted); margin-top: 5px; font-size: 16px; margin-bottom: 5px; }
         
         .container {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
-            max-width: 1400px;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+            max-width: 1600px;
             margin: 0 auto;
         }
         
         .card {
             background: var(--panel);
             border-radius: 16px;
-            padding: 30px;
+            padding: 20px;
             box-shadow: 0 10px 25px -5px rgba(0,0,0,0.4);
         }
         
-        .card h2 { margin-top: 0; font-size: 20px; color: var(--muted); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 15px; }
+        .card h2 { margin-top: 0; font-size: 16px; color: var(--muted); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 5px; }
         
         .status-panel {
             grid-column: 1 / -1;
@@ -50,16 +50,16 @@
             text-align: center;
         }
         
-        .stat-value { font-size: 56px; font-weight: 900; margin: 15px 0; font-variant-numeric: tabular-nums; }
-        .stat-label { font-size: 16px; color: var(--muted); text-transform: uppercase; letter-spacing: 2px; font-weight: bold; }
+        .stat-value { font-size: 42px; font-weight: 900; margin: 10px 0; font-variant-numeric: tabular-nums; }
+        .stat-label { font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; font-weight: bold; }
         
         .indicator {
             display: inline-block;
-            padding: 12px 24px;
+            padding: 8px 16px;
             border-radius: 30px;
             font-weight: 800;
-            font-size: 16px;
-            margin-top: 25px;
+            font-size: 14px;
+            margin-top: 15px;
             letter-spacing: 1px;
             transition: all 0.3s ease;
         }
@@ -74,7 +74,7 @@
             100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } 
         }
         
-        .chart-container { position: relative; height: 350px; width: 100%; margin-top: 20px; }
+        .chart-container { position: relative; height: 180px; width: 100%; margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -101,6 +101,26 @@
                 </div>
             </div>
         </div>
+
+        <!-- Advanced Metrics Panel -->
+        <div class="card status-panel" style="margin-top: -10px;">
+            <div>
+                <div class="stat-label">Memory Usage</div>
+                <div class="stat-value" id="mem-val" style="color: #a855f7; font-size: 28px;">0.0%</div>
+            </div>
+            <div>
+                <div class="stat-label">Network Upload</div>
+                <div class="stat-value" id="up-val" style="color: #14b8a6; font-size: 28px;">0 KB/s</div>
+            </div>
+            <div>
+                <div class="stat-label">Network Download</div>
+                <div class="stat-value" id="down-val" style="color: #f59e0b; font-size: 28px;">0 KB/s</div>
+            </div>
+            <div>
+                <div class="stat-label">Active Processes</div>
+                <div class="stat-value" id="proc-val" style="color: #64748b; font-size: 28px;">0</div>
+            </div>
+        </div>
         
         <!-- CPU Chart -->
         <div class="card">
@@ -115,6 +135,38 @@
             <h2>ML Downtime Prediction Probability</h2>
             <div class="chart-container">
                 <canvas id="probChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Memory Chart -->
+        <div class="card">
+            <h2>Memory Usage History</h2>
+            <div class="chart-container">
+                <canvas id="memChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Processes Chart -->
+        <div class="card">
+            <h2>Active Processes</h2>
+            <div class="chart-container">
+                <canvas id="procChart"></canvas>
+            </div>
+        </div>
+        
+        <!-- Upload Chart -->
+        <div class="card">
+            <h2>Network Upload (KB/s)</h2>
+            <div class="chart-container">
+                <canvas id="upChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Download Chart -->
+        <div class="card">
+            <h2>Network Download (KB/s)</h2>
+            <div class="chart-container">
+                <canvas id="downChart"></canvas>
             </div>
         </div>
     </div>
@@ -132,8 +184,12 @@
                 y: { min: 0, max: 100, grid: { color: 'rgba(255,255,255,0.05)' }, border: { dash: [4, 4] } }
             },
             plugins: { legend: { display: false }, tooltip: { enabled: false } },
-            elements: { point: { radius: 0 } } // hide points for smooth line
+            elements: { point: { radius: 0 } } 
         };
+        
+        const dynamicOptions = JSON.parse(JSON.stringify(commonOptions));
+        delete dynamicOptions.scales.y.max;
+        dynamicOptions.scales.y.min = 0;
 
         const ctxCpu = document.getElementById('cpuChart').getContext('2d');
         const cpuChart = new Chart(ctxCpu, {
@@ -149,6 +205,30 @@
             options: commonOptions
         });
 
+        const memChart = new Chart(document.getElementById('memChart').getContext('2d'), {
+            type: 'line',
+            data: { labels: Array(60).fill(''), datasets: [{ data: Array(60).fill(0), borderColor: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] },
+            options: commonOptions
+        });
+        
+        const procChart = new Chart(document.getElementById('procChart').getContext('2d'), {
+            type: 'line',
+            data: { labels: Array(60).fill(''), datasets: [{ data: Array(60).fill(0), borderColor: '#64748b', backgroundColor: 'rgba(100, 116, 139, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] },
+            options: dynamicOptions
+        });
+        
+        const upChart = new Chart(document.getElementById('upChart').getContext('2d'), {
+            type: 'line',
+            data: { labels: Array(60).fill(''), datasets: [{ data: Array(60).fill(0), borderColor: '#14b8a6', backgroundColor: 'rgba(20, 184, 166, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] },
+            options: dynamicOptions
+        });
+
+        const downChart = new Chart(document.getElementById('downChart').getContext('2d'), {
+            type: 'line',
+            data: { labels: Array(60).fill(''), datasets: [{ data: Array(60).fill(0), borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.1)', borderWidth: 3, fill: true, tension: 0.3 }] },
+            options: dynamicOptions
+        });
+
         // Fetch Data Loop
         async function fetchMetrics() {
             try {
@@ -159,6 +239,11 @@
                 document.getElementById('cpu-val').innerText = data.cpu.toFixed(1) + '%';
                 const probVal = document.getElementById('prob-val');
                 probVal.innerText = data.probability.toFixed(1) + '%';
+                
+                document.getElementById('mem-val').innerText = (data.memory || 0).toFixed(1) + '%';
+                document.getElementById('up-val').innerText = (data.upload || 0).toFixed(1) + ' KB/s';
+                document.getElementById('down-val').innerText = (data.download || 0).toFixed(1) + ' KB/s';
+                document.getElementById('proc-val').innerText = (data.processes || 0);
                 
                 if (data.probability < 50) probVal.style.color = 'var(--success)';
                 else if (data.probability < 85) probVal.style.color = 'orange';
@@ -181,6 +266,22 @@
                 probChart.data.datasets[0].data.shift();
                 probChart.data.datasets[0].data.push(data.probability);
                 probChart.update();
+                
+                memChart.data.datasets[0].data.shift();
+                memChart.data.datasets[0].data.push(data.memory || 0);
+                memChart.update();
+                
+                procChart.data.datasets[0].data.shift();
+                procChart.data.datasets[0].data.push(data.processes || 0);
+                procChart.update();
+                
+                upChart.data.datasets[0].data.shift();
+                upChart.data.datasets[0].data.push(data.upload || 0);
+                upChart.update();
+                
+                downChart.data.datasets[0].data.shift();
+                downChart.data.datasets[0].data.push(data.download || 0);
+                downChart.update();
 
             } catch (err) {
                 console.error("Error fetching admin metrics", err);
