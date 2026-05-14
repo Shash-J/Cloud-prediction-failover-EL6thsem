@@ -157,6 +157,23 @@
             background-color: var(--text-green);
             box-shadow: 0 0 5px var(--text-green);
         }
+        /* Save Status Indicator */
+        .save-status {
+            font-size: 11px;
+            font-weight: 500;
+            padding: 2px 8px;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+        .save-status.saved {
+            color: var(--text-green);
+        }
+        .save-status.saving {
+            color: var(--text-yellow);
+        }
+        .save-status.error {
+            color: var(--danger);
+        }
     </style>
 </head>
 <body>
@@ -217,6 +234,7 @@
                 <div class="panel-header" style="justify-content: space-between;">
                     <span><span style="color: var(--text-green);"></span> Java <span style="margin-left: 10px; color: var(--text-muted);">Auto</span></span>
                     <span style="display: flex; gap: 10px; align-items: center;">
+                        <span class="save-status saved" id="save-status"></span>
                         <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>
                     </span>
                 </div>
@@ -352,6 +370,93 @@
                 btn.innerText = origText;
             }, 1000);
         }
+
+        // ============================================================
+        // AUTO-SAVE SYSTEM: Persist editor code across failovers
+        // ============================================================
+        const STORAGE_KEY = 'leetcode_editor_code';
+        const editorEl = document.querySelector('.editor-content');
+        const saveStatusEl = document.getElementById('save-status');
+        let lastSavedContent = '';
+        let saveTimer = null;
+
+        function setSaveStatus(state, text) {
+            saveStatusEl.className = 'save-status ' + state;
+            saveStatusEl.textContent = text;
+        }
+
+        // --- Debounced save to localStorage on every keystroke ---
+        editorEl.addEventListener('input', () => {
+            clearTimeout(saveTimer);
+            saveTimer = setTimeout(() => {
+                const code = editorEl.innerHTML;
+                localStorage.setItem(STORAGE_KEY, code);
+                setSaveStatus('saving', 'Saving...');
+            }, 500);
+        });
+
+        // --- Periodic server save (every 3s, only if changed) ---
+        async function saveToServer() {
+            const currentContent = editorEl.innerHTML;
+            if (currentContent === lastSavedContent) {
+                setTimeout(saveToServer, 3000);
+                return;
+            }
+
+            try {
+                const res = await fetch('/save-state', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code: currentContent })
+                });
+
+                if (res.ok) {
+                    lastSavedContent = currentContent;
+                    localStorage.setItem(STORAGE_KEY, currentContent);
+                    setSaveStatus('saved', 'Saved ✓');
+                } else {
+                    setSaveStatus('error', 'Save failed');
+                }
+            } catch (err) {
+                // Server unreachable — localStorage is the fallback
+                localStorage.setItem(STORAGE_KEY, currentContent);
+                setSaveStatus('saving', 'Saved locally');
+            }
+
+            setTimeout(saveToServer, 3000);
+        }
+
+        // --- Restore editor content on page load ---
+        async function restoreEditorContent() {
+            try {
+                const res = await fetch('/load-state');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.code && data.code.length > 0) {
+                        editorEl.innerHTML = data.code;
+                        lastSavedContent = data.code;
+                        localStorage.setItem(STORAGE_KEY, data.code);
+                        setSaveStatus('saved', 'Restored ✓');
+                        return;
+                    }
+                }
+            } catch (err) {
+                // Server unreachable — fall through to localStorage
+            }
+
+            // Fallback: restore from localStorage
+            const cached = localStorage.getItem(STORAGE_KEY);
+            if (cached && cached.length > 0) {
+                editorEl.innerHTML = cached;
+                lastSavedContent = cached;
+                setSaveStatus('saved', 'Restored (local) ✓');
+            }
+        }
+
+        // Initialize: restore content then start auto-save loop
+        restoreEditorContent().then(() => {
+            setTimeout(saveToServer, 3000);
+        });
     </script>
 </body>
 </html>

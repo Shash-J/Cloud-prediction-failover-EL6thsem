@@ -22,6 +22,20 @@ class LocalEC2Handler(http.server.SimpleHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
+    def do_POST(self):
+        """Accept save-state requests during failover (state is managed by the router)."""
+        content_length = int(self.headers.get('Content-Length', 0))
+        self.rfile.read(content_length)  # consume the body
+        
+        if self.path == '/save-state':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(b'{"status": "saved"}')
+        else:
+            self.send_response(404)
+            self.end_headers()
+
 if __name__ == "__main__":
     PORT = 8082
     with socketserver.TCPServer(("", PORT), LocalEC2Handler) as httpd:
