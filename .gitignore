@@ -18,4 +18,4 @@ metrics.json
 timeseries.json
 
 # Docs
-docs/
+api.md
